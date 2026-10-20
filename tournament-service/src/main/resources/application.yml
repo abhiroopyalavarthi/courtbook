@@ -1,0 +1,43 @@
+server:
+  port: ${SERVER_PORT:8083}
+
+spring:
+  application:
+    name: tournament-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/courtbook?currentSchema=tournament}
+    username: ${SPRING_DATASOURCE_USERNAME:courtbook}
+    password: ${SPRING_DATASOURCE_PASSWORD:courtbook}
+    hikari:
+      schema: tournament
+  flyway:
+    schemas: tournament
+    default-schema: tournament
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.default_schema: tournament
+  mvc:
+    problemdetails:
+      enabled: true
+
+courtbook:
+  jwks-uri: ${COURTBOOK_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+  events:
+    enabled: ${COURTBOOK_EVENTS_ENABLED:false}
+    queue-name: ${COURTBOOK_EVENTS_QUEUE:courtbook-events}
+    relay-interval-ms: 500
+  aws:
+    endpoint: ${COURTBOOK_AWS_ENDPOINT:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  pattern:
+    level: "%5p [%X{requestId:-}]"

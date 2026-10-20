@@ -1,0 +1,12 @@
+{
+  "name": "courtbook-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "journey": "tsx journey.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15"
+  }
+}

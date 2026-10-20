@@ -1,0 +1,13 @@
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+out/
+.idea/
+*.iml
+.DS_Store
+node_modules/
+frontend/dist/
+.env
+deploy/.env.prod
+*.log
+load/results/

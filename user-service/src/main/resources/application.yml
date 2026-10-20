@@ -1,0 +1,44 @@
+server:
+  port: ${SERVER_PORT:8081}
+
+spring:
+  application:
+    name: user-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/courtbook?currentSchema=users}
+    username: ${SPRING_DATASOURCE_USERNAME:courtbook}
+    password: ${SPRING_DATASOURCE_PASSWORD:courtbook}
+    hikari:
+      schema: users
+  flyway:
+    schemas: users
+    default-schema: users
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.default_schema: users
+  mvc:
+    problemdetails:
+      enabled: true
+
+courtbook:
+  # Accounts registered with these emails become admins.
+  admin-emails: ${COURTBOOK_ADMIN_EMAILS:admin@courtbook.local}
+  jwt:
+    issuer: courtbook
+    ttl: ${COURTBOOK_JWT_TTL:PT12H}
+    # Base64 PKCS#8 RSA private key. Leave empty locally and a key is generated
+    # at startup (tokens then stop working whenever this service restarts).
+    private-key: ${COURTBOOK_JWT_PRIVATE_KEY:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  pattern:
+    level: "%5p [%X{requestId:-}]"

@@ -1,0 +1,130 @@
+# Local development: the whole app with one command.
+#   docker compose -f deploy/docker-compose.yml up --build
+# Then open http://localhost:3000
+#
+# To run only the infrastructure (and start services from IntelliJ):
+#   docker compose -f deploy/docker-compose.yml up postgres elasticmq dynamodb
+
+name: courtbook
+
+x-service-env: &service-env
+  AWS_REGION: us-east-1
+  AWS_ACCESS_KEY_ID: local
+  AWS_SECRET_ACCESS_KEY: local
+  SPRING_DATASOURCE_USERNAME: courtbook
+  SPRING_DATASOURCE_PASSWORD: courtbook
+  COURTBOOK_JWKS_URI: http://user-service:8081/.well-known/jwks.json
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: courtbook
+      POSTGRES_USER: courtbook
+      POSTGRES_PASSWORD: courtbook
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U courtbook -d courtbook"]
+      interval: 3s
+      retries: 20
+
+  elasticmq:
+    image: softwaremill/elasticmq-native:latest
+    volumes:
+      - ./elasticmq.conf:/opt/elasticmq.conf:ro
+    ports: ["9324:9324", "9325:9325"]
+
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    command: ["-jar", "DynamoDBLocal.jar", "-sharedDb", "-inMemory"]
+    ports: ["8000:8000"]
+
+  user-service:
+    build: { context: .., args: { SERVICE: user-service } }
+    image: courtbook/user-service:local
+    environment:
+      <<: *service-env
+      SERVER_PORT: 8081
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/courtbook?currentSchema=users
+      COURTBOOK_ADMIN_EMAILS: ${COURTBOOK_ADMIN_EMAILS:-admin@courtbook.local}
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck: &java-health
+      # The JRE image has bash but no curl, so talk HTTP over bash's /dev/tcp.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/$${SERVER_PORT} && printf 'GET /actuator/health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+      interval: 5s
+      retries: 30
+
+  booking-service:
+    build: { context: .., args: { SERVICE: booking-service } }
+    image: courtbook/booking-service:local
+    environment:
+      <<: *service-env
+      SERVER_PORT: 8082
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/courtbook?currentSchema=booking
+      COURTBOOK_EVENTS_ENABLED: "true"
+      COURTBOOK_AWS_ENDPOINT: http://elasticmq:9324
+    depends_on:
+      postgres: { condition: service_healthy }
+      elasticmq: { condition: service_started }
+      user-service: { condition: service_healthy }
+    healthcheck: *java-health
+
+  tournament-service:
+    build: { context: .., args: { SERVICE: tournament-service } }
+    image: courtbook/tournament-service:local
+    environment:
+      <<: *service-env
+      SERVER_PORT: 8083
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/courtbook?currentSchema=tournament
+      COURTBOOK_EVENTS_ENABLED: "true"
+      COURTBOOK_AWS_ENDPOINT: http://elasticmq:9324
+    depends_on:
+      postgres: { condition: service_healthy }
+      elasticmq: { condition: service_started }
+      user-service: { condition: service_healthy }
+    healthcheck: *java-health
+
+  notification-service:
+    build: { context: .., args: { SERVICE: notification-service } }
+    image: courtbook/notification-service:local
+    environment:
+      <<: *service-env
+      SERVER_PORT: 8084
+      COURTBOOK_AWS_ENDPOINT: http://elasticmq:9324
+      COURTBOOK_DYNAMODB_ENDPOINT: http://dynamodb:8000
+      COURTBOOK_DYNAMODB_CREATE_TABLES: "true"
+    depends_on:
+      elasticmq: { condition: service_started }
+      dynamodb: { condition: service_started }
+      user-service: { condition: service_healthy }
+    healthcheck: *java-health
+
+  gateway:
+    build: { context: .., args: { SERVICE: gateway } }
+    image: courtbook/gateway:local
+    environment:
+      <<: *service-env
+      SERVER_PORT: 8080
+      COURTBOOK_ROUTES_USER: http://user-service:8081
+      COURTBOOK_ROUTES_BOOKING: http://booking-service:8082
+      COURTBOOK_ROUTES_TOURNAMENT: http://tournament-service:8083
+      COURTBOOK_ROUTES_NOTIFICATION: http://notification-service:8084
+      COURTBOOK_CORS_ALLOWED_ORIGINS: http://localhost:3000,http://localhost:5173
+      # Raise these for k6 runs, which send everything from one IP.
+      COURTBOOK_RATE_LIMIT: ${COURTBOOK_RATE_LIMIT:-300}
+      COURTBOOK_LOGIN_RATE_LIMIT: ${COURTBOOK_LOGIN_RATE_LIMIT:-10}
+    ports: ["8080:8080"]
+    depends_on:
+      user-service: { condition: service_healthy }
+      booking-service: { condition: service_healthy }
+      tournament-service: { condition: service_healthy }
+      notification-service: { condition: service_healthy }
+    healthcheck: *java-health
+
+  frontend:
+    build: { context: ../frontend }
+    image: courtbook/frontend:local
+    ports: ["3000:80"]
+    depends_on:
+      gateway: { condition: service_healthy }

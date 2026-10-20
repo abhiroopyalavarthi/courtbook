@@ -1,0 +1,101 @@
+# Production on one EC2 instance. Postgres is RDS, the queue is SQS and the
+# notifications live in DynamoDB, so only the app containers run here.
+#
+# On the instance:
+#   cp .env.prod.example .env.prod   # fill it in
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod pull
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+#
+# AWS credentials come from the instance's IAM role, never from this file.
+
+name: courtbook
+
+x-service: &service
+  restart: unless-stopped
+  env_file: .env.prod
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "3" }
+
+x-java-health: &java-health
+  test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/$${SERVER_PORT} && printf 'GET /actuator/health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"]
+  interval: 10s
+  retries: 30
+
+services:
+  user-service:
+    <<: *service
+    image: ${IMAGE_PREFIX}/user-service:${TAG:-latest}
+    environment:
+      SERVER_PORT: 8081
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${RDS_HOST}:5432/courtbook?currentSchema=users&sslmode=require
+    healthcheck: *java-health
+
+  booking-service:
+    <<: *service
+    image: ${IMAGE_PREFIX}/booking-service:${TAG:-latest}
+    environment:
+      SERVER_PORT: 8082
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${RDS_HOST}:5432/courtbook?currentSchema=booking&sslmode=require
+      COURTBOOK_EVENTS_ENABLED: "true"
+    depends_on:
+      user-service: { condition: service_healthy }
+    healthcheck: *java-health
+
+  tournament-service:
+    <<: *service
+    image: ${IMAGE_PREFIX}/tournament-service:${TAG:-latest}
+    environment:
+      SERVER_PORT: 8083
+      SPRING_DATASOURCE_URL: jdbc:postgresql://${RDS_HOST}:5432/courtbook?currentSchema=tournament&sslmode=require
+      COURTBOOK_EVENTS_ENABLED: "true"
+    depends_on:
+      user-service: { condition: service_healthy }
+    healthcheck: *java-health
+
+  notification-service:
+    <<: *service
+    image: ${IMAGE_PREFIX}/notification-service:${TAG:-latest}
+    environment:
+      SERVER_PORT: 8084
+    depends_on:
+      user-service: { condition: service_healthy }
+    healthcheck: *java-health
+
+  gateway:
+    <<: *service
+    image: ${IMAGE_PREFIX}/gateway:${TAG:-latest}
+    environment:
+      SERVER_PORT: 8080
+      COURTBOOK_ROUTES_USER: http://user-service:8081
+      COURTBOOK_ROUTES_BOOKING: http://booking-service:8082
+      COURTBOOK_ROUTES_TOURNAMENT: http://tournament-service:8083
+      COURTBOOK_ROUTES_NOTIFICATION: http://notification-service:8084
+      COURTBOOK_CORS_ALLOWED_ORIGINS: https://${DOMAIN}
+      COURTBOOK_TRUST_FORWARDED_FOR: "true"
+    depends_on:
+      user-service: { condition: service_healthy }
+      booking-service: { condition: service_healthy }
+      tournament-service: { condition: service_healthy }
+      notification-service: { condition: service_healthy }
+    healthcheck: *java-health
+
+  frontend:
+    <<: *service
+    image: ${IMAGE_PREFIX}/frontend:${TAG:-latest}
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on: [gateway, frontend]
+
+volumes:
+  caddy-data:
+  caddy-config:

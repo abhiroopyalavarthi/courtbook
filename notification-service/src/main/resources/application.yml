@@ -1,0 +1,35 @@
+server:
+  port: ${SERVER_PORT:8084}
+
+spring:
+  application:
+    name: notification-service
+  mvc:
+    problemdetails:
+      enabled: true
+
+courtbook:
+  jwks-uri: ${COURTBOOK_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+  time-zone: America/New_York
+  events:
+    consume: ${COURTBOOK_EVENTS_CONSUME:true}
+    queue-name: ${COURTBOOK_EVENTS_QUEUE:courtbook-events}
+    # Long polling: each receive call waits up to this long for a message.
+    wait-seconds: 10
+  aws:
+    endpoint: ${COURTBOOK_AWS_ENDPOINT:}
+  dynamodb:
+    endpoint: ${COURTBOOK_DYNAMODB_ENDPOINT:}
+    table-prefix: ${COURTBOOK_DYNAMODB_TABLE_PREFIX:courtbook-}
+    # Locally (DynamoDB Local) the service creates its tables; on AWS they're created once by hand or script.
+    create-tables: ${COURTBOOK_DYNAMODB_CREATE_TABLES:false}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  pattern:
+    level: "%5p [%X{requestId:-}]"

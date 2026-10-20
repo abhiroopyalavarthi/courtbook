@@ -1,0 +1,53 @@
+server:
+  port: ${SERVER_PORT:8082}
+
+spring:
+  application:
+    name: booking-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/courtbook?currentSchema=booking}
+    username: ${SPRING_DATASOURCE_USERNAME:courtbook}
+    password: ${SPRING_DATASOURCE_PASSWORD:courtbook}
+    hikari:
+      schema: booking
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+  flyway:
+    schemas: booking
+    default-schema: booking
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate.default_schema: booking
+  mvc:
+    problemdetails:
+      enabled: true
+
+courtbook:
+  jwks-uri: ${COURTBOOK_JWKS_URI:http://localhost:8081/.well-known/jwks.json}
+  schedule:
+    time-zone: America/New_York
+    opens-at-hour: 8
+    closes-at-hour: 22
+    slot-length: PT1H
+    days-ahead: 14
+    max-active-bookings-per-user: ${COURTBOOK_MAX_ACTIVE_BOOKINGS:3}
+  events:
+    # Off by default so the service runs without a queue; Docker Compose and AWS turn it on.
+    enabled: ${COURTBOOK_EVENTS_ENABLED:false}
+    queue-name: ${COURTBOOK_EVENTS_QUEUE:courtbook-events}
+    relay-interval-ms: 500
+  aws:
+    # Empty on AWS (the SDK finds SQS itself); http://localhost:9324 for ElasticMQ.
+    endpoint: ${COURTBOOK_AWS_ENDPOINT:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+logging:
+  pattern:
+    level: "%5p [%X{requestId:-}]"
