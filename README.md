@@ -7,8 +7,6 @@ It's built as four Spring Boot services behind an API gateway, with PostgreSQL a
 <!-- TODO: add a screenshot of the booking grid and a 30-second recording:
      a booking race, a cancellation, and the waitlist notification arriving. -->
 
-**Live:** _TODO: https://your-domain_ (running on AWS credits until _TODO: month_; after that the code and demo stay here)
-
 ```mermaid
 flowchart LR
   WEB["React frontend"] --> GW["API gateway"]
@@ -83,14 +81,6 @@ cd e2e && npm ci && npm run journey     # full user journey through the gateway
 | Images | GitHub Container Registry |
 
 The instance uses an IAM role that can only touch the one queue and three tables; no AWS keys exist in code or config. Every merge to `main` builds arm64 images and redeploys. Step-by-step setup is in [deploy/aws/README.md](deploy/aws/README.md).
-
-## Real usage
-
-_TODO after launch: members signed up, bookings made, waitlist promotions, tournaments run. The admin page shows all of these._
-
-## How we worked
-
-_TODO: who was on the team, and a link to the project board._ One-week sprints planned from a backlog of user stories ([docs/backlog.md](docs/backlog.md)), every change through a reviewed pull request with CI required to pass, and a sprint demo to a club officer acting as product owner.
 
 ## Docs
 
